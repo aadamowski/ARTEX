@@ -167,6 +167,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libcap2-bin arp-scan arping fping iproute2 netdiscover net-tools nfs-common \
       python3-impacket python3-paramiko python3-scapy rpcbind sqlite3 xxd \
       hashcat hydra john ncrack openssh-client ssh-audit sshpass \
+      bettercap ethtool mitmproxy tcpdump \
     && rm -rf /var/lib/apt/lists/*
 # Patch netdiscover to not check for being run as root (capabilities is all that it actually needs to run):
 # TODO: this will be made obsolete by option -R available in netdiscover 0.21.
@@ -187,7 +188,10 @@ EOF
 # Enable required capabilities on network tools that need them when docker-compose.host-network.yml is used
 RUN setcap cap_net_raw,cap_net_admin+eip /usr/sbin/arping \
       cap_net_raw,cap_net_admin+eip /usr/sbin/arp-scan \
-      cap_net_raw,cap_net_admin+eip /usr/sbin/netdiscover
+      cap_net_raw,cap_net_admin+eip /usr/bin/bettercap \
+      cap_net_admin+eip /usr/bin/mitmproxy \
+      cap_net_raw,cap_net_admin+eip /usr/sbin/netdiscover \
+      cap_net_raw,cap_net_admin+eip /usr/bin/tcpdump
 
 # Node 22 from the official nodejs.org tarball: bookworm's apt nodejs is 18,
 # Playwright requires >=20, and 20 is end-of-life. 22 matches the CI and release
@@ -262,6 +266,11 @@ RUN set -eux; \
     bbot --dry-run -t example.com -m wafw00f,paramminer_getparams,lightfuzz,sslcert,gowitness,retirejs --no-color >/tmp/bbot-dry.log 2>&1 || true; \
     ! grep -qE "Installing|ERRR|CRITICAL" /tmp/bbot-dry.log || { cat /tmp/bbot-dry.log; exit 1; }
 
+# Only add capabilitity attributes to ethtool once bbot installation has completed.
+# Ansible executes ethtool (if available) during its "Gathering Facts" task,
+# and when the binary has CAP_NET_ADMIN set - it fails because the build
+# container bounding blocks it, breaking the bbot installation process.
+RUN setcap cap_net_raw,cap_net_admin+eip /usr/sbin/ethtool
 
 # Preinstall Playwright MCP and CLI (globally) so no network download is needed at runtime.
 # @playwright/mcp: the seeded browser MCP runs the playwright-mcp binary directly.
